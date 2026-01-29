@@ -1,5 +1,6 @@
-# Note, large port ranges take extremely long to check
+# This iteration runs max 100 threads at once
 import socket
+import threading
 import ipaddress
 
 def is_valid_address(ip):
@@ -38,14 +39,29 @@ while True:
     print("Invalid port range, try again")
 
 open_ports = []
-for i in range(start, end + 1):
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(0.5)
-        s.connect((ip_entered, i))
-        open_ports.append(i)
-        s.close()
-    except:
-        pass
+lock = threading.Lock()
+semaphore = threading.Semaphore(100) # max 100 threads at once
+
+def scan_port(port):
+    with semaphore:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(0.5)
+            s.connect((ip_entered, port))
+            with lock:
+                open_ports.append(port)
+        except:
+            pass
+        finally:
+            s.close()
+
+threads = []
+for port in range (start, end + 1):
+    t = threading.Thread(target=scan_port,args=(port,))
+    t.start()
+    threads.append(t)
+
+for t in threads:
+    t.join()
 
 print("\nOpen ports are:", *open_ports)
